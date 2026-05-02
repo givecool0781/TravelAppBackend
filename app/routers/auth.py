@@ -1,8 +1,11 @@
 import uuid
 import random
 import time
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Dict, Tuple
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from .. import models, schemas
@@ -16,25 +19,26 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _reset_codes: Dict[str, Tuple[str, float]] = {}
 
 def _send_reset_email(to_email: str, code: str) -> bool:
-    if not settings.RESEND_API_KEY:
+    if not settings.GMAIL_USER or not settings.GMAIL_APP_PASSWORD:
         print(f"[DEV] Reset code for {to_email}: {code}")
         return True
     try:
-        import resend
-        resend.api_key = settings.RESEND_API_KEY
-        resend.Emails.send({
-            "from": settings.FROM_EMAIL,
-            "to": [to_email],
-            "subject": "旅行規劃 APP — 重設密碼",
-            "html": f"""
-            <div style="font-family:sans-serif;max-width:400px;margin:auto">
-              <h2>重設密碼</h2>
-              <p>你的驗證碼是：</p>
-              <h1 style="letter-spacing:8px;color:#2563EB">{code}</h1>
-              <p style="color:#64748B">此驗證碼 1 小時內有效，請勿分享給他人。</p>
-            </div>
-            """,
-        })
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "旅行規劃 APP — 重設密碼"
+        msg["From"] = f"旅行規劃 <{settings.GMAIL_USER}>"
+        msg["To"] = to_email
+        html = f"""
+        <div style="font-family:sans-serif;max-width:400px;margin:auto;padding:24px">
+          <h2 style="color:#0F172A">重設密碼</h2>
+          <p style="color:#64748B">你的驗證碼是：</p>
+          <h1 style="letter-spacing:12px;color:#2563EB;font-size:36px">{code}</h1>
+          <p style="color:#94A3B8;font-size:13px">此驗證碼 1 小時內有效，請勿分享給他人。</p>
+        </div>
+        """
+        msg.attach(MIMEText(html, "html", "utf-8"))
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(settings.GMAIL_USER, settings.GMAIL_APP_PASSWORD)
+            server.sendmail(settings.GMAIL_USER, to_email, msg.as_string())
         return True
     except Exception as e:
         print(f"[ERROR] Email send failed: {e}")
