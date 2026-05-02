@@ -4,7 +4,10 @@ from app.database import engine, Base
 from app.routers import auth, trips
 
 # Create tables on startup
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[WARNING] DB init failed: {e}")
 
 app = FastAPI(title="TravelApp API", version="1.0.0")
 
