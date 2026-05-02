@@ -101,3 +101,19 @@ def reset_password(body: ResetRequest, db: Session = Depends(get_db)):
     db.commit()
     del _reset_codes[body.email]
     return {"message": "密碼重設成功"}
+
+class AdminResetRequest(BaseModel):
+    admin_key: str
+    email: EmailStr
+    new_password: str
+
+@router.post("/admin-reset")
+def admin_reset(body: AdminResetRequest, db: Session = Depends(get_db)):
+    if body.admin_key != settings.JWT_SECRET:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    user = db.query(models.User).filter(models.User.email == body.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="找不到此帳號")
+    user.password = hash_password(body.new_password)
+    db.commit()
+    return {"message": "密碼已重設"}
